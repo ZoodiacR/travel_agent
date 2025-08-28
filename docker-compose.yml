@@ -1,0 +1,38 @@
+﻿version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: travel-agent-ai-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app  # Ajustado para montar la carpeta completa del backend
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - ollama
+
+  frontend:
+    build: ./frontend
+    container_name: travel-agent-ai-frontend
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/app
+      - ./frontend/.env:/app/.env
+      - /app/node_modules # Agregado para proteger la carpeta node_modules
+    env_file:
+      - ./frontend/.env
+
+    stdin_open: true
+    tty: true
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-llm
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama_data:/root/.ollama
+    command: ["serve"]
