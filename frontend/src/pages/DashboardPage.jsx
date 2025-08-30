@@ -1,4 +1,3 @@
-// src/pages/DashboardPage.jsx
 import React, { useState, useRef, useEffect } from "react";
 import {
   Box,
@@ -8,11 +7,14 @@ import {
   Typography,
   CircularProgress,
   IconButton,
+  List,
+  ListItem,
+  ListItemText,
 } from "@mui/material";
 import { Send, AccountCircle, ExitToApp, Payment } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import MapComponent from "../components/MapComponent"; // asegúrate de la ruta
+import MapComponent from "../components/MapComponent";
 import "./Dashboard.css";
 
 const BACKEND_URL = "http://localhost:8000";
@@ -21,6 +23,7 @@ const DashboardPage = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [agentState, setAgentState] = useState(null); // 📌 Estado del agente para la memoria
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
 
@@ -39,32 +42,42 @@ const DashboardPage = () => {
         throw new Error("No se encontró el token. Inicia sesión primero.");
       }
 
+      // ✅ Nuevo payload con el estado anterior
+      const payload = {
+        user_input: userMessage.text,
+        previous_state: agentState, // Enviamos el estado anterior para la memoria
+      };
+
       const res = await fetch(`${BACKEND_URL}/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ user_input: input }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         throw new Error(`Error en la respuesta del servidor: ${res.status}`);
       }
 
-     const data = await res.json();
-     console.log("Respuesta backend:", data);
+      const data = await res.json();
+      console.log("✅ Respuesta del backend (JSON):", data);
 
-     const agentResponse = {
-        text: data.content,
+      // ✅ Guarda el nuevo estado del agente para la siguiente interacción
+      setAgentState(data);
+      console.log("✅ Estado del agente actualizado:", data);
+
+      const agentResponse = {
+        text: data.display_response,
         sender: "agent",
-        type: data.response_type
-        };
-
+        type: data.response_type,
+        questions: data.questions,
+      };
 
       setMessages((prev) => [...prev, agentResponse]);
     } catch (error) {
-      console.error("Error en el fetch:", error);
+      console.error("❌ Error en el fetch:", error);
       const errorMessage = {
         text: "⚠️ Error al conectar con el servidor",
         sender: "agent",
@@ -88,16 +101,18 @@ const DashboardPage = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // 📌 Determina el itinerario a pasar al mapa
+  const itinerary = agentState?.itinerary || [];
+  console.log("✅ Itinerario pasado al mapa:", itinerary);
+
   return (
     <Box className="dashboard-grid">
-      {/* Columna del mapa */}
       <Box className="map-container">
-        <MapComponent />
+        {/* ✅ Pasa el itinerario al MapComponent */}
+        <MapComponent itinerary={itinerary} />
       </Box>
 
-      {/* Columna del chat */}
       <Box className="chat-container">
-        {/* Botones arriba */}
         <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1, gap: 1 }}>
           <IconButton sx={{ color: "text.secondary" }}>
             <AccountCircle />
@@ -110,7 +125,6 @@ const DashboardPage = () => {
           </IconButton>
         </Box>
 
-        {/* Mensajes */}
         <Box sx={{ flexGrow: 1, overflowY: "auto", p: 1 }}>
           <AnimatePresence>
             {messages.map((msg, index) => (
@@ -134,7 +148,21 @@ const DashboardPage = () => {
                     borderBottomLeftRadius: msg.sender === "user" ? 20 : 0,
                   }}
                 >
+                  {/* ✅ Renderiza el mensaje principal */}
                   <Typography variant="body1">{msg.text}</Typography>
+
+                  {/* ✅ Renderiza las preguntas si existen */}
+                  {msg.questions && Array.isArray(msg.questions) && msg.questions.length > 0 && (
+                    <Box sx={{ mt: 1 }}>
+                      <List dense disablePadding>
+                        {msg.questions.map((q, qIndex) => (
+                          <ListItem key={qIndex} disableGutters>
+                            <ListItemText secondary={`- ${q}`} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Box>
+                  )}
                 </Paper>
               </motion.div>
             ))}
@@ -142,7 +170,6 @@ const DashboardPage = () => {
           <div ref={messagesEndRef} />
         </Box>
 
-        {/* Input */}
         <Box
           component="form"
           onSubmit={sendMessage}

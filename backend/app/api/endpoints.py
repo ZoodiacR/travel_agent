@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status,Request,Query
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel
 from typing import List, Dict, Any
-from ..core.security import create_access_token, get_current_user, authenticate_user
+from ..core.security import create_access_token, get_current_user, authenticate_user, oauth2_scheme
 from fastapi.responses import JSONResponse
 from ..core.agent import run_travel_planner
 
@@ -96,52 +96,65 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     access_token = create_access_token(data={"sub": user["username"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
-# --- Endpoint del Agente IA (Chat) ---
 
+user_sessions: Dict[str, dict] = {}
+
+# Define el esquema de seguridad
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
+
+
+# ✅ Nuevo modelo de solicitud, ahora solo con el input del usuario
 class ChatRequest(BaseModel):
     user_input: str
 
 
-@router.get("/chat")
+@router.post("/chat")
 async def chat_with_agent(
-    message: str = Query(..., description="Tu mensaje para el asistente de viajes"),
-    city: str = Query(..., description="Ciudad a la que quieres viajar"),
-    interests: List[str] = Query(..., description="Lista de intereses del usuario, separados por &interests="),
+        request: ChatRequest,
+        token: str = Depends(oauth2_scheme)
 ):
     """
-    Endpoint GET para probar en Swagger fácilmente.
-    Se reciben:
-    - message: pregunta o solicitud del usuario
-    - city: ciudad destino
-    - interests: lista de intereses (varios parámetros ?interests=museos&interests=comida)
+    Endpoint para chatear con el planificador de viajes.
+    El estado de la conversación se gestiona en el backend.
     """
     try:
-        print("📩 Payload recibido:", {"message": message, "city": city, "interests": interests})
+        # 1. Recupera el estado anterior de la "base de datos" de sesiones.
+        # Si no existe (primera vez), previous_state será None.
+        previous_state = user_sessions.get(token, None)
 
-        result = run_travel_planner(message, city.strip(), interests)
+        print(f"📩 Payload recibido: user_input='{request.user_input}', previous_state={previous_state}")
 
-        # fallback por si el agente falla
+        # 2. Llama a la función del agente con el estado recuperado.
+        result = run_travel_planner(
+            user_request=request.user_input,
+            previous_state=previous_state
+        )
+
+        # 3. Guarda el nuevo estado del agente para futuras interacciones.
+        user_sessions[token] = result
+
+        # 4. Asegura que la respuesta sea un diccionario válido.
         if not isinstance(result, dict):
-            result = {
-                "response_type": "error",
-                "city": city.strip(),
-                "interests": interests,
-                "questions": [],
-                "itinerary": []
-            }
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "response_type": "error",
+                    "display_response": "Ocurrió un error inesperado.",
+                    "itinerary": [],
+                    "questions": [],
+                    "city": "",
+                    "interests": [],
+                    "trip_type": ""
+                }
+            )
 
+        # 5. Devuelve el estado final al frontend.
         return JSONResponse(content=result)
 
     except Exception as e:
         print("❌ ERROR en chat_with_agent:", str(e))
-        return JSONResponse(
-            status_code=500,
-            content={
-                "response_type": "error",
-                "city": city.strip(),
-                "interests": interests,
-                "questions": [],
-                "itinerary": [],
-                "error": str(e),
-            }
+        # ✅ Retorna un error 500 para errores internos.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ocurrió un error interno en el servidor: {e}"
         )
