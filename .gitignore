@@ -1,0 +1,7 @@
+
+# Secrets and build artifacts
+.env
+__pycache__/
+*.py[cod]
+node_modules/
+dist/

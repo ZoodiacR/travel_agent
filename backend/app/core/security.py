@@ -9,8 +9,10 @@ from dotenv import load_dotenv
 # Cargar variables de entorno desde .env
 load_dotenv()
 
-# Configuración de JWT
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "supersecret_default")  # fallback
+# Configuración de JWT: sin valor por defecto, la app no arranca sin un secreto real
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY no está configurada. Defínela en backend/.env (ver .env.example).")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -18,11 +20,15 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Base de datos fake (solo para pruebas)
-users_db = {
-    "admin": {"username": "admin", "password": "hashed_password"},
-}
-users_db["admin"]["password"] = pwd_context.hash("supersecret")
+# Usuario de demo (solo para pruebas): se crea únicamente si sus credenciales vienen del entorno
+users_db: dict[str, dict[str, str]] = {}
+_demo_username = os.getenv("DEMO_USERNAME")
+_demo_password = os.getenv("DEMO_PASSWORD")
+if _demo_username and _demo_password:
+    users_db[_demo_username] = {
+        "username": _demo_username,
+        "password": pwd_context.hash(_demo_password),
+    }
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -43,9 +49,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-
-    # DEBUG - asegúrate de que la clave es un string
-    print("DEBUG JWT_SECRET_KEY:", JWT_SECRET_KEY, type(JWT_SECRET_KEY))
 
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

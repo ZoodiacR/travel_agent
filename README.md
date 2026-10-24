@@ -1,14 +1,14 @@
 # TravelAgent-AI
 
-**TravelAgent-AI** es un agente de viajes impulsado por IA que utiliza un LLM local (Ollama) con fallback a OpenAI para crear planes de viaje personalizados.
+**TravelAgent-AI** es un agente de viajes impulsado por IA que crea planes de viaje personalizados. Usa OpenAI (`gpt-4o-mini`) cuando hay una API key válida y, si no, un modelo Llama 3 (8B) local en Ollama.
 
 ## Características
 
-- **Backend**: FastAPI, LangGraph, LangChain.
+- **Backend**: FastAPI, LangGraph, LangChain. El grafo tiene dos nodos (`check_missing_info` → `create_itinerary`) unidos por una arista condicional.
 - **Frontend**: React, Material-UI, Framer Motion.
 - **Autenticación**: JWT y Google OAuth.
-- **Pagos**: Integración con Stripe Checkout.
-- **RAG**: Agente de Recuperación Aumentada (RAG) con Pinecone para información contextual.
+- **Pagos**: Stripe (PaymentIntents + Stripe Elements) con verificación de firma de webhooks; dos planes prepago de tokens.
+- **RAG**: módulo de recuperación en fase de prototipo; la integración con Pinecone está planificada.
 
 ## Requisitos
 
@@ -19,8 +19,8 @@
 
 1.  **Clona el repositorio**:
     ```bash
-    git clone [https://github.com/tu-usuario/travel-agent-ai.git](https://github.com/tu-usuario/travel-agent-ai.git)
-    cd travel-agent-ai
+    git clone https://github.com/ZoodiacR/travel_agent.git
+    cd travel_agent
     ```
 
 2.  **Configura las variables de entorno**:
@@ -34,7 +34,7 @@
 3.  **Completa las variables de entorno**:
     Edita los archivos `.env` y `.env` con tus claves API.
 
-    -   `backend/.env`: `OPENAI_API_KEY`, `PINECONE_API_KEY`, `JWT_SECRET_KEY`, `STRIPE_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+    -   `backend/.env`: `OPENAI_API_KEY`, `PINECONE_API_KEY`, `JWT_SECRET_KEY` (obligatoria; genera una con `python -c "import secrets; print(secrets.token_urlsafe(48))"`), `STRIPE_SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Opcional para pruebas: `DEMO_USERNAME` y `DEMO_PASSWORD` crean un usuario de demo.
     -   `frontend/.env`: `REACT_APP_STRIPE_PUBLISHABLE_KEY`.
 
 4.  **Inicia los servicios con Docker Compose**:
